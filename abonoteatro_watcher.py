@@ -28,6 +28,9 @@ from playwright.sync_api import sync_playwright
 PROGRAM_URL = "https://www.abonoteatro.com/programacion"
 BASE_URL = "https://www.abonoteatro.com"
 STATE_FILE = Path(os.environ.get("STATE_FILE", "shows_vistos.json"))
+CURRENT_FILE = Path(
+    os.environ.get("CURRENT_FILE", "actuaciones_actuales.json")
+)
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or "-1004359686735"
 
 
@@ -165,6 +168,19 @@ def save_state(items: list[Actuacion]) -> None:
     }
     STATE_FILE.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    CURRENT_FILE.write_text(
+        json.dumps(
+            {
+                "updated_at": payload["checked_at"],
+                "source": PROGRAM_URL,
+                "actuaciones": [asdict(item) for item in items],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 
