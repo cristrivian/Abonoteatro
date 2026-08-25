@@ -209,8 +209,19 @@ def fetch_page() -> str:
                 "input[autocomplete='current-password']"
             ).first
             try:
-                email_field.wait_for(state="visible", timeout=30_000)
-                password_field.wait_for(state="visible", timeout=30_000)
+                page.locator("input").first.wait_for(
+                    state="visible", timeout=30_000
+                )
+                if not email_field.is_visible():
+                    email_field = page.locator(
+                        "input:not([type='hidden']):not([type='password'])"
+                    ).first
+                if not password_field.is_visible():
+                    password_field = page.locator(
+                        "input[type='password'], input:not([type='hidden'])"
+                    ).last
+                email_field.wait_for(state="visible", timeout=5_000)
+                password_field.wait_for(state="visible", timeout=5_000)
             except PlaywrightTimeoutError as exc:
                 print(
                     "Formulario no localizado: "
@@ -223,11 +234,11 @@ def fetch_page() -> str:
 
             email_field.fill(email)
             password_field.fill(password)
-            submit = page.locator("button[type='submit'], button").filter(
-                has_text=re.compile(r"iniciar sesión|acceder|entrar|login", re.I)
-            ).first
-            if not submit.is_visible():
-                submit = page.locator("button[type='submit']").first
+            submit = page.locator("button[type='submit']").first
+            if not submit.count():
+                submit = page.locator("button").last
+            if not submit.count():
+                raise RuntimeError("No se encontró el botón de acceso.")
             submit.click()
             page.wait_for_timeout(2_000)
             print(f"URL después del login: {page.url}")
