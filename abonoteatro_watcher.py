@@ -81,6 +81,8 @@ def extract_actuaciones(html: str) -> list[Actuacion]:
     )
     if not candidates:
         candidates = soup.select("main h1, main h2, main h3, main h4, main a[href]")
+    if not candidates:
+        candidates = soup.select("h3, h4")
 
     for candidate in candidates:
         anchor = (
@@ -88,8 +90,48 @@ def extract_actuaciones(html: str) -> list[Actuacion]:
             if candidate.name == "a"
             else candidate.select_one("a[href]")
         )
+        heading = (
+            candidate
+            if candidate.name in {"h3", "h4"}
+            else candidate.select_one("h3, h4")
+        )
         if not anchor and candidate.name in {"h1", "h2", "h3", "h4"}:
             anchor = candidate.find_parent("a", href=True)
+        if not anchor and candidate.name in {"h3", "h4"}:
+            # Algunas versiones de la web muestran la ficha como una tarjeta
+            # no enlazada. En ese caso usamos la página de programación como
+            # URL estable y el título como identificador.
+            title = clean_text(candidate.get_text(" ", strip=True))
+            href = PROGRAM_URL
+            details = clean_text(
+                candidate.parent.get_text(" ", strip=True)
+                if candidate.parent
+                else title
+            )
+            if (
+                len(title) >= 5
+                and title.lower() not in {"programación", "filtros", "categorías"}
+            ):
+                item = Actuacion(
+                    title,
+                    href,
+                    details,
+                    fingerprint(title, href, details),
+                )
+                found[item.fingerprint] = item
+            continue
+        if not anchor and heading:
+            title = clean_text(heading.get_text(" ", strip=True))
+            details = clean_text(candidate.get_text(" ", strip=True))
+            if len(title) >= 5:
+                item = Actuacion(
+                    title,
+                    PROGRAM_URL,
+                    details,
+                    fingerprint(title, PROGRAM_URL, details),
+                )
+                found[item.fingerprint] = item
+            continue
         if not anchor:
             continue
         title = clean_text(anchor.get_text(" ", strip=True))
