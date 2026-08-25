@@ -188,23 +188,57 @@ def fetch_page() -> str:
     email = os.environ.get("EMAIL")
     password = os.environ.get("PASSWORD")
     if not email or not password:
-        raise RuntimeError("Faltan las variables de entorno EMAIL o PASSWORD.")
+        raise RuntimeError(
+            "Faltan Secrets: "
+            f"EMAIL={'configurado' if email else 'ausente'}, "
+            f"PASSWORD={'configurado' if password else 'ausente'}."
+        )
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 1000})
         page.goto(PROGRAM_URL, wait_until="domcontentloaded", timeout=60_000)
+        print(f"URL inicial: {page.url}")
 
         if "/auth/login" in page.url:
-            page.locator("input[type='email'], input[name='email']").first.fill(email)
-            page.locator("input[type='password'], input[name='password']").first.fill(password)
-            page.locator("button[type='submit']").first.click()
-            page.wait_for_load_state("domcontentloaded", timeout=60_000)
+            email_field = page.locator(
+                "input[type='email'], input[name='email'], input[autocomplete='email']"
+            ).first
+            password_field = page.locator(
+                "input[type='password'], input[name='password'], "
+                "input[autocomplete='current-password']"
+            ).first
+            try:
+                email_field.wait_for(state="visible", timeout=30_000)
+                password_field.wait_for(state="visible", timeout=30_000)
+            except PlaywrightTimeoutError as exc:
+                print(
+                    "Formulario no localizado: "
+                    f"inputs={page.locator('input').count()}, "
+                    f"botones={page.locator('button').count()}"
+                )
+                raise RuntimeError(
+                    "La pantalla de acceso no mostró los campos de email y contraseña."
+                ) from exc
+
+            email_field.fill(email)
+            password_field.fill(password)
+            submit = page.locator("button[type='submit'], button").filter(
+                has_text=re.compile(r"iniciar sesión|acceder|entrar|login", re.I)
+            ).first
+            if not submit.is_visible():
+                submit = page.locator("button[type='submit']").first
+            submit.click()
+            page.wait_for_timeout(2_000)
+            print(f"URL después del login: {page.url}")
 
         page.goto(PROGRAM_URL, wait_until="domcontentloaded", timeout=60_000)
         if "/auth/login" in page.url:
             browser.close()
-            raise RuntimeError("No se pudo iniciar sesión; comprueba EMAIL y PASSWORD.")
+            raise RuntimeError(
+                "El login fue rechazado o la sesión no se creó; "
+                "comprueba los Secrets EMAIL y PASSWORD."
+            )
 
         try:
             page.wait_for_load_state("networkidle", timeout=20_000)
