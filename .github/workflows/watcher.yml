@@ -1,0 +1,41 @@
+name: RASTREADOR ABONO TEATRO
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Ejecución automática cada hora
+  workflow_dispatch:      # Botón de ejecución manual desde GitHub
+
+permissions:
+  contents: write         # Permiso para actualizar la lista de shows vistos
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+      
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Instalar dependencias
+        run: |
+          pip install playwright requests beautifulsoup4
+          python -m playwright install chromium
+          
+      - name: Ejecutar Rastreador
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python abonoteatro_watcher.py
+
+      - name: Guardar historial
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add shows_vistos.json
+          git commit -m "Actualizar espectáculos vistos [skip ci]" || exit 0
+          git push
